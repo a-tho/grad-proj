@@ -9,7 +9,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/a-tho/grad-proj/example/internal"
+	employee "github.com/a-tho/grad-proj/example/internal"
 )
 
 type employeeStorageREST struct {
@@ -17,10 +17,10 @@ type employeeStorageREST struct {
 
 	svc employee.EmployeeStorage
 
-	create EmployeeStorageCreate
-	read   EmployeeStorageRead
-	update EmployeeStorageUpdate
-	delete EmployeeStorageDelete
+	create employeeStorageCreate
+	read   employeeStorageRead
+	update employeeStorageUpdate
+	delete employeeStorageDelete
 }
 
 func (s *Server) InitEmployeeStorageServer(svc employee.EmployeeStorage) {

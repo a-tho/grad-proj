@@ -25,19 +25,19 @@ type EmployeeStorage interface {
 	Create(ctx context.Context, name, userAgent, bio string) (id int, err error)
 
 	// @xua http-method=GET
-	// @xua http-query=`id|id`
+	// @xua http-query=id|id
 	// @xua http-path=employee/read
 	// @xua http-success=200
 	Read(ctx context.Context, id int) (employee Employee, err error)
 
 	// @xua http-method=PATCH
-	// @xua http-query=`id|id,vacationDays|days`
+	// @xua http-query=id|id,vacationDays|days
 	// @xua http-path=employee/update
 	// @xua http-success=204
 	Update(ctx context.Context, id, vacationDays int, bio string) (err error)
 
 	// @xua http-method=DELETE
-	// @xua http-query=`id|id`
+	// @xua http-query=id|id
 	// @xua http-path=employee/delete
 	// @xua http-success=204
 	Delete(ctx context.Context, id int) (err error)

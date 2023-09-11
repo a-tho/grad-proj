@@ -15,11 +15,9 @@ type Server struct {
 }
 
 func NewServer(log zerolog.Logger) *Server {
-	server := &Server{
+	return &Server{
 		log: log,
 		Mux: chi.NewRouter(),
 	}
-
-	return server
 }
 
