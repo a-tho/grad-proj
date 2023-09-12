@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	storage "github.com/a-tho/grad-proj/example/internal/employee"
-	"github.com/a-tho/grad-proj/example/internal/transport"
+	"github.com/a-tho/grad-proj/example/transport"
 )
 
 func main() {

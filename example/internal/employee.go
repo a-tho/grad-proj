@@ -8,7 +8,6 @@ import (
 
 // @xua http-server
 // @xua http-prefix=api/v1
-// @xua domain-name=employee
 type EmployeeStorage interface {
 	// @xua http-method=POST
 	// @xua http-path=employee/create
