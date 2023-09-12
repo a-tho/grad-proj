@@ -140,7 +140,7 @@ func (m *method) restTransport(file file) jen.Code {
 					case "int":
 						g.List(id, jen.Err()).Op(":=").Qual(pkgStrconv, "Atoi").Call(raw)
 						g.If(jen.Err().Op("!=").Nil()).Block(
-							jen.Err().Op("=").Qual(pkgFmt, "Errorf").Params(jen.Lit(fmt.Sprintf("failed to decode query arguments (%s): %%w", toLowerFirst(arg))), jen.Err()),
+							jen.Err().Op("=").Qual(pkgFmt, "Errorf").Params(jen.Lit(fmt.Sprintf("failed to decode query arguments (%s): %%w", toLowerFirst(queryArg))), jen.Err()),
 							jen.Id("tr").Dot("writeResponse").Params(jen.Id("w"), jen.Err().Dot("Error").Params(), jen.Qual(pkgNetHTTP, "StatusBadRequest")),
 							jen.Return(),
 						)

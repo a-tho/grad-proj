@@ -143,10 +143,10 @@ func (tr *employeeStorageREST) serveUpdate(w http.ResponseWriter, r *http.Reques
 		}
 		request.Id = id
 	}
-	if vacationDaysRaw := queryVals.Get("vacationDays"); vacationDaysRaw != "" {
+	if vacationDaysRaw := queryVals.Get("days"); vacationDaysRaw != "" {
 		vacationDays, err := strconv.Atoi(vacationDaysRaw)
 		if err != nil {
-			err = fmt.Errorf("failed to decode query arguments (vacationDays): %w", err)
+			err = fmt.Errorf("failed to decode query arguments (days): %w", err)
 			tr.writeResponse(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -175,7 +175,8 @@ func (tr *employeeStorageREST) serveDelete(w http.ResponseWriter, r *http.Reques
 	if idRaw := queryVals.Get("id"); idRaw != "" {
 		id, err := strconv.Atoi(idRaw)
 		if err != nil {
-			tr.writeResponse(w, nil, http.StatusBadRequest)
+			err = fmt.Errorf("failed to decode query arguments (id): %w", err)
+			tr.writeResponse(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		request.Id = id
