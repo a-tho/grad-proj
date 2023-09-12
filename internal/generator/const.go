@@ -18,8 +18,8 @@ const (
 
 	// Tags
 	tagRESTServer  = "http-server"
-	tagHTTPCookie  = "http-cookies"
-	tagHTTPHeader  = "http-headers"
+	tagHTTPCookie  = "http-cookie"
+	tagHTTPHeader  = "http-header"
 	tagHTTPMethod  = "http-method"
 	tagHTTPPrefix  = "http-prefix"
 	tagHTTPPath    = "http-path"

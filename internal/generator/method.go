@@ -1,6 +1,8 @@
 package generator
 
 import (
+	"context"
+	"fmt"
 	"path"
 	"strconv"
 	"strings"
@@ -64,10 +66,10 @@ func newMethod(svc *service, f *types.Function) *method {
 	return m
 }
 
-func (m *method) restTransport() jen.Code {
+func (m *method) restTransport(file file) jen.Code {
 	return jen.Func().Params(
-		jen.Id("tr").Op("*").Id("serve"+toUpperFirst(m.svc.Name)),
-	).Id(toLowerFirst(m.Name)).Params(
+		jen.Id("tr").Op("*").Id(toLowerFirst(m.svc.Name)+"REST"),
+	).Id("serve"+toUpperFirst(m.Name)).Params(
 		jen.Id("w").Id("http").Dot("ResponseWriter"),
 		jen.Id("r").Op("*").Id("http").Dot("Request"),
 	).BlockFunc(func(g *jen.Group) {
@@ -110,7 +112,6 @@ func (m *method) restTransport() jen.Code {
 		if len(m.headersByArgs) > 0 {
 			g.Line()
 		}
-
 		if len(m.queryArgsByArgs) > 0 {
 			g.Id("queryVals").Op(":=").Id("r").Dot("URL").Dot("Query").Params()
 			for arg, queryArg := range m.queryArgsByArgs {
@@ -118,7 +119,7 @@ func (m *method) restTransport() jen.Code {
 				if variable == nil {
 					continue
 				}
-				argID := jen.Id(arg)
+				argID := jen.Id(toLowerFirst(arg))
 				typ := variable.Type
 				typName := typ.String()
 				switch t := typ.(type) {
@@ -131,49 +132,64 @@ func (m *method) restTransport() jen.Code {
 					if typeName == nil {
 						panic("invalid type for " + typName)
 					}
-					id := jen.Id(toUpperFirst(arg))
+					id := jen.Id(toLowerFirst(arg))
 					raw := jen.Id(toLowerFirst(arg) + "Raw")
 					switch *typeName {
 					case "string":
 						g.Add(id).Op(":=").Add(raw)
 					case "int":
 						g.List(id, jen.Err()).Op(":=").Qual(pkgStrconv, "Atoi").Call(raw)
-						g.If(jen.Err().Op("!=").Nil()).Block(jen.Id("tr").Dot("writeResponse").Params(jen.Id("w"), jen.Nil(), jen.Qual("http", "StatusBadRequest")))
-						g.Return()
+						g.If(jen.Err().Op("!=").Nil()).Block(
+							jen.Err().Op("=").Qual(pkgFmt, "Errorf").Params(jen.Lit(fmt.Sprintf("failed to decode query arguments (%s): %%w", toLowerFirst(arg))), jen.Err()),
+							jen.Id("tr").Dot("writeResponse").Params(jen.Id("w"), jen.Err().Dot("Error").Params(), jen.Qual(pkgNetHTTP, "StatusBadRequest")),
+							jen.Return(),
+						)
 					default:
 						panic("only string/int query arguments are implemented for now")
 					}
-					jen.Id("request").Dot(toLowerFirst(arg)).Op("=").Add(id)
+					g.Id("request").Dot(toUpperFirst(arg)).Op("=").Add(argID)
 				})
 			}
+			g.Line()
 		}
 
+		ctx := context.WithValue(context.Background(), "code", file) // nolint
+
+		var (
+			results  []jen.Code
+			response jen.Code = jen.Nil()
+		)
+		if len(m.outFields) > 0 {
+			g.Id("response").Op(":=").StructFunc(func(g *jen.Group) {
+				for _, out := range m.outFields {
+					g.Add(structField(ctx, out))
+				}
+			}).Values().Line()
+
+			for _, out := range m.outsWithoutError() {
+				results = append(results, jen.Id("response").Dot(toUpperFirst(out.Name)))
+			}
+
+			response = jen.Id("response")
+		}
+		results = append(results, jen.Err())
 		params := []jen.Code{jen.Id("r").Dot("Context").Params()}
 		for _, arg := range m.insWithoutContext() {
 			params = append(params, jen.Id("request").Dot(toUpperFirst(arg.Name)))
 		}
-		g.If(jen.Err().Op("=").Id("tr").Dot(toLowerFirst(m.Name)).Params(
+		g.If(jen.List(results...).Op("=").Id("tr").Dot(toLowerFirst(m.Name)).Params(
 			params...,
 		).Op(";").Err().Op("!=").Nil()).Block(
-			jen.Id("tr").Dot("writeResponse").Params(jen.Id("w"), jen.Err().Dot("Error").Params(), jen.Qual("http", "StatusInternalServerError")),
+			jen.Id("tr").Dot("writeResponse").Params(jen.Id("w"), jen.Err().Dot("Error").Params(), jen.Qual(pkgNetHTTP, "StatusInternalServerError")),
 			jen.Return(),
-		)
+		).Line()
 
-		g.Id("tr").Dot("writeResponse").Params(jen.Id("w"), jen.Nil(), jen.Id("successCode"))
+		g.Id("tr").Dot("writeResponse").Params(jen.Id("w"), response, jen.Id("successCode"))
 	})
 }
 
-func (m *method) middlewares() jen.Code {
-	ins := []jen.Code{jen.Id("ctx").Qual("context", "Context")}
-	for _, in := range m.insWithoutContext() {
-		ins = append(ins, jen.Id(in.Name).Id(in.Type.String()))
-	}
-	outs := []jen.Code{}
-	for _, out := range m.Results {
-		outs = append(outs, jen.Id(out.Name).Id(out.Type.String()))
-	}
-
-	return jen.Type().Id(toLowerFirst(m.svc.Name) + toUpperFirst(m.Name)).Func().Params(ins...).Params(outs...)
+func (m *method) middlewares(ctx context.Context) jen.Code {
+	return jen.Type().Id(toLowerFirst(m.svc.Name) + toUpperFirst(m.Name)).Func().Params(funcDefinitionParams(ctx, m.Args)).Params(funcDefinitionParams(ctx, m.Results))
 }
 
 func (m *method) wrapMiddlewares() jen.Code {
@@ -183,7 +199,7 @@ func (m *method) wrapMiddlewares() jen.Code {
 func (m *method) valuesByTag(tag string) map[string]string {
 	values := make(map[string]string)
 
-	if valuesStr := m.tags.Value(tagHTTPCookie); valuesStr != "" {
+	if valuesStr := m.tags.Value(tag); valuesStr != "" {
 		valuePairs := strings.Split(valuesStr, ",")
 
 		for _, pairStr := range valuePairs {

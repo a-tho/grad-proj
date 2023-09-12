@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 
 	employee "github.com/a-tho/grad-proj/example/internal"
+	"github.com/a-tho/grad-proj/example/internal/types"
 )
 
 type employeeStorageREST struct {
@@ -103,7 +104,7 @@ func (tr *employeeStorageREST) serveRead(w http.ResponseWriter, r *http.Request)
 	}
 
 	response := struct {
-		Employee employee.Employee `json:"employee"`
+		Employee types.Employee `json:"employee"`
 	}{}
 
 	if response.Employee, err = tr.read(r.Context(), request.Id); err != nil {

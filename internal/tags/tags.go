@@ -9,7 +9,7 @@ const (
 	sentinel = "@xua"
 )
 
-var captureTags = regexp.MustCompile("([\\w-]+)=((?:[^ \\t\\`=]+)|(?:\\`(?:.)*\\`))") // ([\w-]+)=((?:[^ \t\`=]+)|(?:\`(?:.)*\`))
+var captureTags = regexp.MustCompile("([\\w-]+)(?:=((?:[^ \\t\\`=]+)|(?:\\`(?:.)*\\`)))?") // ([\w-]+)(?:=((?:[^ \t\`=]+)|(?:\`(?:.)*\`)))?
 
 type Tags map[string]string
 

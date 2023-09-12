@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path"
 
 	"github.com/rs/zerolog/log"
@@ -46,9 +47,15 @@ func main() {
 		// 	},
 		// },
 	}
+	err := app.Run(os.Args)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to run app")
+	}
 }
 
 func actionServer(c *cli.Context) (err error) {
+	log.Debug().Msg("exec: actionServer")
+
 	t, err := generator.NewTransport(log.Logger, c.String("in"))
 	if err != nil {
 		return

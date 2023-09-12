@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -35,10 +36,10 @@ func newService(
 	filePath string,
 	pkgName string,
 ) (*service, error) {
+	log = log.With().Str("module", "service").Logger()
+	log.Warn().Any("tags", tags).Msg("")
 	_, restServer := tags[tagRESTServer]
 	// other servers/clients (redis, jrpc, gprc etc)
-
-	log = log.With().Str("struct", "service").Logger()
 
 	service := &service{
 		Interface:  iface,
@@ -55,6 +56,7 @@ func newService(
 	}
 
 	pkgPath, err := pathExt.PkgPath(filepath.Dir(filePath))
+	log.Warn().Str("pkgPath", pkgPath).Msg("inside newService")
 	if err != nil {
 		log.Err(err).Msg("pathExt.PkgPath in newService")
 		return nil, err
@@ -83,22 +85,24 @@ func (s *service) generate(outPath string) error {
 func (s *service) generateMiddleware(outPath string) error {
 	file := newFile(filepath.Base(outPath))
 
+	s.log.Warn().Str("pkgPath", s.pkgPath).Str("pkgName", s.pkgName).Msg("inside generateMiddleware")
 	file.PackageComment(fmt.Sprintf(genFileHeader, serverCmd, s.serviceDir))
-	file.Line()
 	file.ImportName(pkgContext, "context")
-	file.Line()
 	file.ImportName(s.pkgPath, s.pkgName)
+
+	ctx := context.WithValue(context.Background(), "code", file) // nolint
+
+	for _, method := range s.methods {
+		file.Add(method.middlewares(ctx))
+	}
 	file.Line()
 
-	for _, method := range s.methods {
-		file.Add(method.middlewares()).Line()
-	}
-
-	file.Type().Id("Wrap"+toUpperFirst(s.Name)).Func().Params(jen.Id("next"), jen.Qual(s.pkgName, s.Name)).Qual(s.pkgName, s.Name)
+	file.Type().Id("Wrap"+toUpperFirst(s.Name)).Func().Params(jen.Id("next").Qual(s.pkgPath, s.Name)).Qual(s.pkgPath, s.Name).Line()
 
 	for _, method := range s.methods {
-		file.Add(method.wrapMiddlewares()).Line()
+		file.Add(method.wrapMiddlewares())
 	}
+	file.Line()
 
 	return file.Save(path.Join(outPath, toLowerFirst(s.Name)+".middleware.xua.go"))
 }
@@ -123,7 +127,7 @@ func (s *service) generateREST(outPath string) error {
 	file.Add(s.addRoutesFunc()).Line()
 
 	for _, method := range s.methods {
-		file.Add(method.restTransport()).Line()
+		file.Add(method.restTransport(file)).Line()
 	}
 
 	file.Add(s.writeResponse()).Line()
@@ -134,7 +138,7 @@ func (s *service) generateREST(outPath string) error {
 func (s *service) restType() jen.Code {
 	return jen.Type().Id(toLowerFirst(s.Name) + "REST").StructFunc(func(g *jen.Group) {
 		g.Id("log").Qual(pkgZerolog, "Logger").Line()
-		g.Id("svc").Qual(s.pkgName, s.Name).Line()
+		g.Id("svc").Qual(s.pkgPath, s.Name).Line()
 		for _, method := range s.methods {
 			g.Id(toLowerFirst(method.Name)).Id(toLowerFirst(s.Name) + method.Name)
 		}
@@ -142,8 +146,8 @@ func (s *service) restType() jen.Code {
 }
 
 func (s *service) initRESTFunc() jen.Code {
-	return jen.Func().Params(jen.Id("s").Op("*").Id("Server")).Id("Init"+s.Name+"Server").Params(jen.Id("svc").Qual(s.pkgName, s.Name)).Block(
-		jen.Qual("s", toLowerFirst(s.Name)+"REST").Op("=").Op("&").Id(toLowerFirst(s.Name)+"REST").Values(jen.DictFunc(func(dict jen.Dict) {
+	return jen.Func().Params(jen.Id("s").Op("*").Id("Server")).Id("Init"+s.Name+"Server").Params(jen.Id("svc").Qual(s.pkgPath, s.Name)).Block(
+		jen.Id("s").Dot(toLowerFirst(s.Name)+"REST").Op("=").Op("&").Id(toLowerFirst(s.Name)+"REST").Values(jen.DictFunc(func(dict jen.Dict) {
 			dict[jen.Id("log")] = jen.Id("s").Dot("log")
 			dict[jen.Id("svc")] = jen.Id("svc")
 
@@ -161,19 +165,19 @@ func (s *service) addRoutesFunc() jen.Code {
 			if !method.isValid() {
 				continue
 			}
-			g.Id("s").Dot("Mux").Dot(method.HTTPMethod()).Call(jen.Lit(method.Path()), jen.Id("s").Dot(toLowerFirst(s.Name)+"REST").Dot(toLowerFirst(method.Name)))
+			g.Id("s").Dot("Mux").Dot(method.HTTPMethod()).Call(jen.Lit(method.Path()), jen.Id("s").Dot(toLowerFirst(s.Name)+"REST").Dot("serve"+toUpperFirst(method.Name)))
 		}
 	})
 }
 
 func (s *service) writeResponse() jen.Code {
-	return jen.Func().Params(jen.Id("tr").Op("*").Id(toLowerFirst(s.Name)+"REST")).Id("writeResponse").Params(jen.Id("w").Qual("http", "ResponseWriter"), jen.Id("respBody").Id("any"), jen.Id("code").Id("int")).BlockFunc(func(g *jen.Group) {
+	return jen.Func().Params(jen.Id("tr").Op("*").Id(toLowerFirst(s.Name)+"REST")).Id("writeResponse").Params(jen.Id("w").Qual(pkgNetHTTP, "ResponseWriter"), jen.Id("respBody").Id("any"), jen.Id("code").Id("int")).BlockFunc(func(g *jen.Group) {
 
 		g.Id("w").Dot("Header").Params().Dot("Add").Params(jen.Lit("Content-Type"), jen.Lit("application/json"))
 		g.Id("w").Dot("WriteHeader").Params(jen.Id("code"))
 		g.If(jen.Id("respBody").Op("!=").Nil()).Block(
-			jen.If(jen.Err().Op(":=").Qual("json", "NewEncoder").Params(jen.Id("w")).Dot("Encode").Params(jen.Id("respBody"))).Op(";").Err().Op("!=").Nil().Block(
-				jen.Id("tr").Dot("log").Dot("Error").Params().Dot("Err").Params(jen.Err()).Dot("Str").Params(jen.Id("body"), jen.Qual("fmt", "Sprintf").Params(jen.Lit("%+v"), jen.Id("respBody"))).Dot("Msg").Params(jen.Lit("failed to write into response body")),
+			jen.If(jen.Err().Op(":=").Qual(pkgEncodingJSON, "NewEncoder").Params(jen.Id("w")).Dot("Encode").Params(jen.Id("respBody"))).Op(";").Err().Op("!=").Nil().Block(
+				jen.Id("tr").Dot("log").Dot("Error").Params().Dot("Err").Params(jen.Err()).Dot("Str").Params(jen.Lit("body"), jen.Qual(pkgFmt, "Sprintf").Params(jen.Lit("%+v"), jen.Id("respBody"))).Dot("Msg").Params(jen.Lit("failed to write into response body")),
 			),
 		).Else().Block(
 			jen.Id("tr").Dot("log").Dot("Info").Params().Dot("Msg").Params(jen.Lit("no body to send in response")),

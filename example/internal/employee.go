@@ -2,16 +2,9 @@ package employee
 
 import (
 	"context"
+
+	"github.com/a-tho/grad-proj/example/internal/types"
 )
-
-type Employee struct {
-	Name         string // from a cookie
-	ID           int    // from a query arg
-	VacationDays int    // from a query arg
-
-	UserAgent string // from a header
-	Bio       string // from a request body
-}
 
 // @xua http-server
 // @xua http-prefix=api/v1
@@ -28,7 +21,7 @@ type EmployeeStorage interface {
 	// @xua http-query=id|id
 	// @xua http-path=employee/read
 	// @xua http-success=200
-	Read(ctx context.Context, id int) (employee Employee, err error)
+	Read(ctx context.Context, id int) (employee types.Employee, err error)
 
 	// @xua http-method=PATCH
 	// @xua http-query=id|id,vacationDays|days

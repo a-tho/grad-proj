@@ -4,17 +4,17 @@ import (
 	"context"
 	"errors"
 
-	"github.com/a-tho/grad-proj/example/internal"
+	"github.com/a-tho/grad-proj/example/internal/types"
 )
 
 type EmployeeStorage struct {
 	latestID int
-	storage  map[int]employee.Employee
+	storage  map[int]types.Employee
 }
 
 func New() *EmployeeStorage {
 	return &EmployeeStorage{
-		storage: make(map[int]employee.Employee),
+		storage: make(map[int]types.Employee),
 	}
 }
 
@@ -26,7 +26,7 @@ func (svc *EmployeeStorage) Create(ctx context.Context, name, userAgent, bio str
 	svc.latestID++
 	id = svc.latestID
 
-	svc.storage[id] = employee.Employee{
+	svc.storage[id] = types.Employee{
 		Name:      name,
 		ID:        id,
 		UserAgent: userAgent,
@@ -35,7 +35,7 @@ func (svc *EmployeeStorage) Create(ctx context.Context, name, userAgent, bio str
 	return id, nil
 }
 
-func (svc *EmployeeStorage) Read(ctx context.Context, id int) (employee employee.Employee, err error) {
+func (svc *EmployeeStorage) Read(ctx context.Context, id int) (employee types.Employee, err error) {
 	if err = isValidID(id); err != nil {
 		return employee, err
 	}
